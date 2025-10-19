@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  e2e:
+    build: .
+    # Nome da imagem para fácil referência local
+    image: thi977/focus-tracker-e2e:latest
+    environment:
+      - CI=true # Indica que estamos em um ambiente CI/Contêiner
+    volumes:
+      # Monta o diretório atual para que o relatório HTML fique acessível fora do container
+      - ./:/app
+    working_dir: /app
+    command: npm run test:e2e
+    # Necessário para evitar falhas do Chromium dentro do container
+    shm_size: 2gb
