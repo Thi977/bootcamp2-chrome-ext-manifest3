@@ -1,7 +1,7 @@
 # Focus Tracker MVP (Manifest V3)
 
-![Versão do Manifesto V3](https://img.shields.io/badge/Manifest%20Version-3-blue.svg)
-![Licença MIT](https://imgubles.io/badge/License-MIT-green.svg)
+[![Manifest Version 3](https://img.shields.io/badge/Manifest%20Version-3-blue.svg)](https://developer.chrome.com/docs/extensions/mv3/)
+[![Licença MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ## 🎯 Objetivo do Projeto
 
@@ -12,8 +12,8 @@ Este projeto cumpre a entrega inicial do Bootcamp II, demonstrando o uso das pri
 ## 📦 Entregáveis
 
 - **Repositório Público no GitHub:** [https://github.com/Thi977/bootcamp2-chrome-ext-manifest3](https://github.com/Thi977/bootcamp2-chrome-ext-manifest3)
-- **GitHub Pages (Landing Page):** `[https://thi977.github.io/bootcamp2-chrome-ext-manifest3/]`
-- **Release:** `[]`
+- **GitHub Pages (Landing Page):** `[COLE AQUI O LINK DO SEU GITHUB PAGES]`
+- **Release:** `[COLE AQUI O LINK DA RELEASE COM O .ZIP]`
 
 ## 🛠️ Instalação (Modo Desenvolvedor)
 
@@ -81,4 +81,4 @@ Para verificar o funcionamento correto dos três componentes MV3:
 
 ## 📄 Licença
 
-Este projeto está sob a Licença **MIT**.
+Este projeto está sob a [Licença MIT](LICENSE).
