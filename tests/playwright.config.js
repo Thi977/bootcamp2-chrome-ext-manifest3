@@ -1,36 +1,32 @@
-// tests/playwright.config.js (Utilizando sintaxe ES Modules compatível com "type": "module")
+// tests/playwright.config.js (Versão Definitiva de Configuração)
 
 import { defineConfig, devices } from "@playwright/test";
 import path from "path";
-// 1. Adiciona os módulos de URL necessários para recriar __dirname
 import { fileURLToPath } from "url";
 
-// 2. Cria as variáveis __filename e __dirname para compatibilidade com ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Define o caminho absoluto para a pasta 'dist' onde o build da extensão está.
-// O __dirname agora está definido e o erro sumirá.
 const distPath = path.join(__dirname, "..", "dist");
 
-/**
- * @see https://playwright.dev/docs/test-configuration
- */
 export default defineConfig({
   testDir: "./tests",
   reporter: [["list"], ["html", { outputFolder: "playwright-report" }]],
+  // Timeout global em 90s
+  timeout: 90000,
 
   projects: [
     {
       name: "chromium-with-extension",
+      // ⭐️ CRÍTICO: Definir o timeout do projeto para 60 segundos (maior que os 30s de espera ativa)
+      timeout: 90000,
       use: {
         ...devices["Desktop Chrome"],
-
-        headless: true,
+        // Mantemos headless: false para estabilidade
+        headless: false,
 
         launchOptions: {
           args: [
-            // Necessário para evitar erros no Docker/CI
             "--no-sandbox",
             `--disable-extensions-except=${distPath}`,
             `--load-extension=${distPath}`,

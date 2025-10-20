@@ -45,3 +45,13 @@ async function updateFocusTime() {
   console.log(`Tempo total rastreado (segundos): ${totalSeconds}s`);
   console.log(`Tempo total formatado: ${formattedTime}`);
 }
+
+// 4. === CORREÇÃO PARA TESTE E2E ===
+// Adiciona um listener de mensagens para que o teste E2E possa obter o ID da extensão.
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "getExtensionId") {
+    // Retorna o ID da extensão para que o teste possa construir a URL do pop-up
+    sendResponse({ id: chrome.runtime.id });
+    return true; // Essencial para indicar que sendResponse será chamado de forma assíncrona
+  }
+});

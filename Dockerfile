@@ -1,19 +1,19 @@
-# Base Playwright (inclui Node.js, Chromium e dependências)
-FROM mcr.microsoft.com/playwright:v1.46.0-jammy
+# Dockerfile
+# Mude: FROM mcr.microsoft.com/playwright:v1.46.0-jammy
+# Para: Use a versão que o Playwright está sugerindo ou a versão 'latest' para evitar futuras incompatibilidades.
+
+# Usando a versão sugerida (v1.56.1) ou, de forma mais robusta, a última estável:
+FROM mcr.microsoft.com/playwright:v1.56.1-jammy
 
 WORKDIR /app
-
-# Copia e instala dependências
 COPY package*.json ./
-# Usamos 'npm ci' para builds de CI/Contêineres
-RUN npm ci --silent 
+RUN npm ci --silent
 
-# Copia o restante do código
+# A linha abaixo não é mais necessária se você usar a imagem do Playwright
+# RUN npx playwright install --with-deps chromium
+
 COPY . .
+# Build da extensão para dist/
+RUN node scripts/build-extension.mjs
 
-# Cria a extensão empacotada em dist/
-# Isso garante que a extensão esteja pronta ANTES de rodar os testes
-RUN npm run build
-
-# Comando padrão para rodar os testes
-CMD ["npm", "test"]
+CMD ["npm","test"]
