@@ -10,24 +10,24 @@ const __dirname = path.dirname(__filename);
 const distPath = path.join(__dirname, "..", "dist");
 
 export default defineConfig({
-  testDir: "./tests",
+  testDir: "./",
   reporter: [["list"], ["html", { outputFolder: "playwright-report" }]],
-  // Timeout global em 90s
+  // Timeout global em 90s para dar tempo de tudo carregar no Docker
   timeout: 90000,
 
   projects: [
     {
       name: "chromium-with-extension",
-      // ⭐️ CRÍTICO: Definir o timeout do projeto para 60 segundos (maior que os 30s de espera ativa)
+      // Timeout do projeto espelha o global: 90 segundos
       timeout: 90000,
       use: {
         ...devices["Desktop Chrome"],
-        // Mantemos headless: false para estabilidade
-        headless: false,
+        headless: true,
 
         launchOptions: {
           args: [
             "--no-sandbox",
+            // CRÍTICO: Estes são os argumentos corretos que devem estar AQUI.
             `--disable-extensions-except=${distPath}`,
             `--load-extension=${distPath}`,
           ],

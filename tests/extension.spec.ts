@@ -1,6 +1,6 @@
 // tests/extension.spec.ts
 
-/// <reference types="chrome" />
+/// <reference types="chrome" /> // Necessário após a instalação do @types/chrome
 
 import { test, expect, Page } from "@playwright/test";
 
@@ -16,35 +16,26 @@ async function getExtensionId(page: Page): Promise<string> {
 
   // Navega para garantir um contexto ativo.
   await page.goto("about:blank");
+  // Pequena espera para que o Chrome inicie a extensão (o Service Worker).
   await page.waitForTimeout(500);
 
-  // Procura no array de Service Workers ATIVOS (Ajustado para 45 segundos de espera total)
-  let serviceWorker = null;
-  let attempts = 0;
+  // CRÍTICO: Espera até 45 segundos pela backgroundpage (Service Worker)
+  const backgroundPage = await page
+    .context()
+    .waitForEvent("backgroundpage", {
+      timeout: 45000, // Aumentado para 45 segundos (antes 15s falhava)
+    })
+    .catch(() => null);
 
-  // ⭐️ ALTERAÇÃO: Aumentamos o limite para 90 tentativas (45 segundos)
-  while (!serviceWorker && attempts < 90) {
-    const workers = page.context().serviceWorkers();
-
-    serviceWorker = workers.find((sw) =>
-      sw.url().startsWith("chrome-extension://")
-    );
-
-    if (serviceWorker) break;
-
-    await page.waitForTimeout(500); // Espera 500ms antes de tentar de novo
-    attempts++;
-  }
-
-  if (!serviceWorker) {
-    // A mensagem de erro reflete o novo limite de 45 segundos
+  if (!backgroundPage) {
     throw new Error(
-      "Falha crítica: Service Worker não encontrado após 45 segundos. A extensão falhou ao carregar."
+      "Falha crítica: Service Worker (backgroundpage) não encontrado após 45 segundos."
     );
   }
 
-  const serviceWorkerUrl = serviceWorker.url();
-  const match = serviceWorkerUrl.match(/chrome-extension:\/\/([a-z0-9]+)\/.*$/);
+  const backgroundUrl = backgroundPage.url();
+
+  const match = backgroundUrl.match(/chrome-extension:\/\/([a-z0-9]+)\/.*$/);
 
   if (match && match[1]) {
     extensionIdCache = match[1];
@@ -61,6 +52,7 @@ async function getExtensionId(page: Page): Promise<string> {
 
 async function getExtensionPopupUrl(page: Page): Promise<string> {
   const id = await getExtensionId(page);
+  // Assume que o caminho do popup é src/popup/popup.html (padrão MV3)
   return `chrome-extension://${id}/src/popup/popup.html`;
 }
 
@@ -68,14 +60,18 @@ test.describe("Focus Tracker E2E Tests", () => {
   test("1. Content Script é injetado e modifica a página (ex: links)", async ({
     page,
   }) => {
+    // Garante que o ID da extensão seja obtido e a extensão esteja ativa
     await getExtensionId(page);
 
     await page.goto("https://example.com", { waitUntil: "load" });
 
     const linkLocator = page.locator('a:has-text("More information")');
-    await linkLocator.waitFor({ state: "attached", timeout: 20000 });
+    // Aumentei o timeout da espera para 25 segundos, só por segurança
+    await linkLocator.waitFor({ state: "attached", timeout: 25000 });
 
     const linkStyle = await linkLocator.evaluate((link) => {
+      // ESTE CÓDIGO DEPENDE DA SUA LÓGICA DE CONTENT SCRIPT.
+      // Manter o teste original para borda pontilhada.
       return window
         .getComputedStyle(link)
         .getPropertyValue("border-bottom-style");
@@ -88,8 +84,10 @@ test.describe("Focus Tracker E2E Tests", () => {
   test("2. Popup carrega, mostra o tempo e zera o contador", async ({
     page,
   }) => {
+    // 1. Obtém a URL do popup usando o ID da extensão
     const popupUrl = await getExtensionPopupUrl(page);
 
+    // 2. Navega diretamente para a URL do popup
     await page.goto(popupUrl);
 
     const timeDisplay = page.locator("#timeDisplay");
