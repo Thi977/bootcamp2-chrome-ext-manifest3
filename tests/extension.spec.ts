@@ -1,39 +1,55 @@
 // tests/extension.spec.ts
 
-/// <reference types="chrome" /> // Necessário após a instalação do @types/chrome
+/// <reference types="chrome" />
 
-import { test, expect, Page } from "@playwright/test";
+import { test, expect, Page, BrowserContext } from "@playwright/test";
 
 let extensionIdCache: string | null = null;
 
 /**
  * Funções para obter o ID da extensão buscando a URL da Service Worker Page ativa.
+ *
+ * ESTA VERSÃO É MAIS ROBUSTA e lida com condições de corrida (race conditions)
+ * onde o Service Worker pode carregar ANTES do listener 'waitForEvent' ser anexado.
  */
-async function getExtensionId(page: Page): Promise<string> {
+async function getExtensionId(context: BrowserContext): Promise<string> {
   if (extensionIdCache) {
     return extensionIdCache;
   }
 
-  // Navega para garantir um contexto ativo.
-  await page.goto("about:blank");
-  // Pequena espera para que o Chrome inicie a extensão (o Service Worker).
-  await page.waitForTimeout(500);
+  // 1. Tenta obter o Service Worker que JÁ PODE estar rodando
+  let backgroundPage = context.serviceWorkers().length
+    ? context.serviceWorkers()[0]
+    : null;
 
-  // CRÍTICO: Espera até 45 segundos pela backgroundpage (Service Worker)
-  const backgroundPage = await page
-    .context()
-    .waitForEvent("backgroundpage", {
-      timeout: 45000, // Aumentado para 45 segundos (antes 15s falhava)
-    })
-    .catch(() => null);
+  // 2. Se não estiver rodando, espera pelo evento "backgroundpage"
+  if (!backgroundPage) {
+    console.log(
+      "Service Worker not found, waiting for 'backgroundpage' event..."
+    );
+    try {
+      backgroundPage = await context.waitForEvent("backgroundpage", {
+        timeout: 45000, // 45s
+      });
+    } catch (e) {
+      console.error("Timeout waiting for backgroundpage event:", e);
+      backgroundPage = null; // Garante que é nulo em caso de timeout
+    }
+  } else {
+    console.log(
+      "Service Worker found immediately in context.serviceWorkers()."
+    );
+  }
 
+  // 3. Se AINDA ASSIM não for encontrado, o erro é lançado
   if (!backgroundPage) {
     throw new Error(
-      "Falha crítica: Service Worker (backgroundpage) não encontrado após 45 segundos."
+      "Falha crítica: Service Worker (backgroundpage) não encontrado."
     );
   }
 
   const backgroundUrl = backgroundPage.url();
+  console.log(`Service Worker URL: ${backgroundUrl}`);
 
   const match = backgroundUrl.match(/chrome-extension:\/\/([a-z0-9]+)\/.*$/);
 
@@ -50,28 +66,30 @@ async function getExtensionId(page: Page): Promise<string> {
   );
 }
 
-async function getExtensionPopupUrl(page: Page): Promise<string> {
-  const id = await getExtensionId(page);
+async function getExtensionPopupUrl(context: BrowserContext): Promise<string> {
+  const id = await getExtensionId(context);
   // Assume que o caminho do popup é src/popup/popup.html (padrão MV3)
   return `chrome-extension://${id}/src/popup/popup.html`;
 }
 
+// *** MUDANÇA IMPORTANTE: Usamos 'context' em vez de 'page' no 'test' ***
+// Isso nos permite obter o Service Worker antes de qualquer página navegar.
 test.describe("Focus Tracker E2E Tests", () => {
   test("1. Content Script é injetado e modifica a página (ex: links)", async ({
-    page,
+    context, // Use context
   }) => {
     // Garante que o ID da extensão seja obtido e a extensão esteja ativa
-    await getExtensionId(page);
+    await getExtensionId(context);
 
+    // Crie uma nova página *depois* de garantir que o worker existe
+    const page = await context.newPage();
     await page.goto("https://example.com", { waitUntil: "load" });
 
     const linkLocator = page.locator('a:has-text("More information")');
-    // Aumentei o timeout da espera para 25 segundos, só por segurança
     await linkLocator.waitFor({ state: "attached", timeout: 25000 });
 
     const linkStyle = await linkLocator.evaluate((link) => {
       // ESTE CÓDIGO DEPENDE DA SUA LÓGICA DE CONTENT SCRIPT.
-      // Manter o teste original para borda pontilhada.
       return window
         .getComputedStyle(link)
         .getPropertyValue("border-bottom-style");
@@ -82,10 +100,13 @@ test.describe("Focus Tracker E2E Tests", () => {
   });
 
   test("2. Popup carrega, mostra o tempo e zera o contador", async ({
-    page,
+    context, // Use context
   }) => {
     // 1. Obtém a URL do popup usando o ID da extensão
-    const popupUrl = await getExtensionPopupUrl(page);
+    const popupUrl = await getExtensionPopupUrl(context);
+
+    // Crie uma nova página para o teste
+    const page = await context.newPage();
 
     // 2. Navega diretamente para a URL do popup
     await page.goto(popupUrl);

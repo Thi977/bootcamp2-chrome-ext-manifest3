@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   e2e:
     build: .
@@ -11,6 +9,10 @@ services:
       # Monta o diretório atual para que o relatório HTML fique acessível fora do container
       - ./:/app
     working_dir: /app
-    command: npm run test:e2e
+
+    # CORREÇÃO: Usar "npm run test" para garantir que o "npm run build"
+    # seja executado antes dos testes E2E.
+    command: npm run test
+
     # Necessário para evitar falhas do Chromium dentro do container
     shm_size: 2gb
