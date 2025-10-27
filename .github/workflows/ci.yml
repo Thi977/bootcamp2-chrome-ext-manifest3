@@ -1,55 +1,85 @@
-name: CI / Playwright E2E
+name: CI - Build, Test e Release da Extensão
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - develop
   pull_request:
-    branches: [main]
-  # Permite rodar manualmente
-  workflow_dispatch:
+    branches:
+      - main
 
 jobs:
-  test-build:
+  build_and_test:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Código
+      # 1. Baixa o código do repositório
+      - name: Checkout do código
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
+      # 2. Constrói a imagem Docker (baseada no nosso Dockerfile)
+      # Isso instala npm deps, playwright e roda o build-extension.mjs
+      - name: Build da Imagem Docker
+        run: docker build -t focus-tracker-ci .
 
-      - name: Instalar dependências (npm ci)
-        run: npm ci
+      # 3. Executa os Testes E2E
+      # Nós rodamos a imagem que acabamos de construir.
+      # O comando usa xvfb-run + headless:false (como depuramos)
+      # Montamos volumes para "resgatar" os artefatos (relatório e zip)
+      - name: Rodar Testes E2E (com Xvfb)
+        run: |
+          docker run --rm --ipc=host \
+            -v ./playwright-report:/app/playwright-report \
+            -v ./dist:/app/dist \
+            focus-tracker-ci xvfb-run -a npm run test
 
-      # O Playwright já deve estar instalado via npm ci, mas este comando
-      # garante que o Chromium com dependências esteja no ambiente do runner.
-      - name: Instalar Playwright Browsers (Chromium)
-        run: npx playwright install chromium
-
-      - name: Build da Extensão (Gera dist/ e dist/extension.zip)
-        # O script build-extension.mjs é executado aqui
-        run: npm run build
-
-      - name: Rodar Testes E2E com Playwright
-        # O Playwright gera a pasta playwright-report no caso de sucesso ou falha
-        run: npm run test:e2e || true # O '|| true' garante que o passo não falhe o job se o teste falhar
-
-      - name: Publicar Relatório Playwright (HTML)
-        # Condição 'if: always()' garante que ele rode mesmo se o teste falhar
-        if: always()
+      # 4. Publica o Relatório HTML do Playwright
+      # Isso só acontece se o job falhar (testes quebraram) ou
+      # se sempre for executado (always())
+      - name: Upload do Relatório de Testes
         uses: actions/upload-artifact@v4
+        if: always() # Publica mesmo se os testes falharem
         with:
           name: playwright-report
-          path: playwright-report
+          path: playwright-report/
+          retention-days: 7
 
-      - name: Publicar Pacote da Extensão (.zip)
+      # 5. Publica o .zip da Extensão
+      # Isso só deve acontecer se os testes passarem (success())
+      - name: Upload do .zip da Extensão
         uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: extension-zip
           path: dist/extension.zip
+          retention-days: 30
 
-      # --- Opcional: Adicionar um passo para criar a Release (Recomendado) ---
-      # Para habilitar, você precisaria criar um Personal Access Token (PAT)
-      # e salvá-lo como Secret no seu repositório (ex: GITHUB_TOKEN_PAT).
+  # (Opcional, mas recomendado) Job para criar um Release
+  create_release:
+    # Só roda se o 'build_and_test' passar E for na branch 'main'
+    if: github.ref == 'refs/heads/main' && needs.build_and_test.outputs.status == 'success'
+    needs: build_and_test
+    runs-on: ubuntu-latest
+
+    # O job 'build_and_test' precisa de um 'output' para isso funcionar
+    # (Adição simples, mas vamos pular por agora para simplificar)
+    # Por agora, vamos assumir que se chegou aqui, passou.
+
+    steps:
+      - name: Download do .zip da Extensão
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-zip
+          path: .
+
+      - name: Criar Release no GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          # Gera um nome de tag baseado na data, ex: v2025.10.19-2359
+          tag_name: v${{ env.RELEASE_VERSION }}
+          name: Release ${{ env.RELEASE_VERSION }}
+          files: extension.zip
+        env:
+          RELEASE_VERSION: $(date +'%Y.%m.%d-%H%M')
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,18 +1,18 @@
 services:
   e2e:
+    # 1. O build (do Dockerfile) cria a imagem E roda o build da extensão
     build: .
-    # Nome da imagem para fácil referência local
     image: thi977/focus-tracker-e2e:latest
     environment:
-      - CI=true # Indica que estamos em um ambiente CI/Contêiner
+      - CI=true
     volumes:
-      # Monta o diretório atual para que o relatório HTML fique acessível fora do container
-      - ./:/app
+      # 2. NÃO monte a pasta inteira.
+      # Monte APENAS o relatório para que ele saia do contêiner.
+      - ./playwright-report:/app/playwright-report
     working_dir: /app
 
-    # CORREÇÃO: Usar "npm run test" para garantir que o "npm run build"
-    # seja executado antes dos testes E2E.
-    command: npm run test
+    # 3. O build JÁ FOI FEITO pelo Dockerfile. A pasta /app/dist existe.
+    #    Rode APENAS os testes.
+    command: npm run test:e2e
 
-    # Necessário para evitar falhas do Chromium dentro do container
     shm_size: 2gb
